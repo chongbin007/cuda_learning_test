@@ -11,7 +11,6 @@
 	  }\
 }
 
-
 /* 
  * Square each element in the array A and write to array C.
  */
