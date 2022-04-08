@@ -27,13 +27,7 @@ int main(void){
         printf("Device will not handle overlaps, so no speed up from streams\n");
         return 0;
     }
-    cudaEvent_t start, stop;
-    float elapsedTime;
 
-    //启动计时器
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start, 0); //在stream0中插入start事件
 
     //初始化两个流
     cudaStream_t stream0, stream1;
@@ -66,6 +60,13 @@ int main(void){
         host_a[i] = rand();
         host_b[i] = rand();
     }
+    cudaEvent_t start, stop;
+    float elapsedTime;
+
+    //启动计时器
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start, 0); //在默认stream中插入start事件
 
     //在整体数据上循环，每个数据块的大小为N, 每次将2N个数据块传给stream
 	//N个传个stream0, N个传给stream1
@@ -82,9 +83,8 @@ int main(void){
     cudaMemcpyAsync(dev_b1, host_b + N, N * sizeof(int), cudaMemcpyHostToDevice, stream1);
     kernel2 <<<N / 1024, 1024, 0, stream1 >>>(dev_a1, dev_b1, dev_c1);
     cudaMemcpyAsync(host_c + N, dev_c1, N * sizeof(int), cudaMemcpyDeviceToHost, stream1);
-    
 
-    cudaEventRecord(stop, 0);//在stream0中插入stop事件
+    cudaEventRecord(stop, 0);//在默认中插入stop事件，默认流会同步所有stream
 	//等待event会阻塞调用host线程，同步操作，等待stop事件.
 	//该函数类似于cudaStreamSynchronize，只不过是等待一个event而不是整个stream执行完毕
     cudaEventSynchronize(stop);
@@ -108,6 +108,8 @@ int main(void){
             return;
         }
     }
+    cudaStreamDestroy(stream0);
+    cudaStreamDestroy(stream1);
     printf ("test passed.\n");
     //释放流和内存
     cudaFreeHost(host_a);
@@ -119,7 +121,6 @@ int main(void){
     cudaFree(dev_a1);
     cudaFree(dev_b1);
     cudaFree(dev_c1);
-    cudaStreamDestroy(stream0);
-    cudaStreamDestroy(stream1);
+
     return 0;
 }

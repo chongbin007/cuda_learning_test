@@ -76,10 +76,14 @@ int main(void){
 	//等待event会阻塞调用host线程，同步操作，等待stop事件.
 	//该函数类似于cudaStreamSynchronize，只不过是等待一个event而不是整个stream执行完毕
     cudaEventSynchronize(stop);
+
 	//stop事件过来的时候，就说明
     cudaEventElapsedTime(&elapsedTime, start, stop);
     printf("Time taken: %3.1f ms\n", elapsedTime);
 
+    //销毁流
+    for (int i = 0; i < N_STREAM; ++i)
+        cudaStreamDestroy(stream[i]);
     //释放流和内存
     cudaFreeHost(host_a);
     cudaFreeHost(host_b);
@@ -87,8 +91,7 @@ int main(void){
     cudaFree(dev_a0);
     cudaFree(dev_b0);
     cudaFree(dev_c0);
-    for (int i = 0; i < N_STREAM; ++i)
-        cudaStreamDestroy(stream[i]);
+
 
     return 0;
 }

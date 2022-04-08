@@ -72,6 +72,8 @@ __global__ void copySharedMem(float *odata, const float *idata)
 
 // naive transpose
 // 最简单的矩阵转置
+// global memory读合并，但是写没合并所以性能下降很多，因为不是连续访问
+// 写odata的时候是非连续的，这里读是按行一个个读，但是写是按列往下写。地址不连续就没有合并
 // Simplest transpose; doesn't use shared memory.
 // Global memory reads are coalesced but writes are not.
 __global__ void transposeNaive(float *odata, const float *idata)
@@ -85,7 +87,7 @@ __global__ void transposeNaive(float *odata, const float *idata)
 }
 
 // coalesced transpose
-//使用shared memory做转置
+// 使用shared memory做转置，利用转置关系存储在shared memory中实现读写合并
 // Uses shared memory to achieve coalesing in both reads and writes
 // Tile width == #banks causes shared memory bank conflicts.
 __global__ void transposeCoalesced(float *odata, const float *idata)
@@ -110,7 +112,7 @@ __global__ void transposeCoalesced(float *odata, const float *idata)
    
 
 // No bank-conflict transpose
-// 非bank冲突转置，在shared memory基础上解决bank 冲突
+// 非bank冲突转置，解决bank 冲突，就是在TILE_DIM+1
 // Same as transposeCoalesced except the first tile dimension is padded 
 // to avoid shared memory bank conflicts.
 __global__ void transposeNoBankConflicts(float *odata, const float *idata)

@@ -69,7 +69,8 @@ int main()
 		//就必须要等到所有数据全部拷贝完再执行计算，这么做可以提高性能
 		cudaMemcpyAsync(dev_a, host_a + i, N * sizeof(int), cudaMemcpyHostToDevice, stream);
 		cudaMemcpyAsync(dev_b, host_b + i, N * sizeof(int), cudaMemcpyHostToDevice, stream);
-		//注意这里开启线程数是N
+		//注意这里开启线程数是N, 第三个参数是shared_memory大小，第四个参数是指定运行kernel的stream
+		//如果不指定stream则运行在默认stream上
 		kernel <<<N / 1024, 1024, 0, stream >>> (dev_a, dev_b, dev_c);
  
 		cudaMemcpyAsync(host_c + i, dev_c, N * sizeof(int), cudaMemcpyDeviceToHost, stream);
@@ -84,11 +85,6 @@ int main()
  
 	std::cout << "消耗时间GPU： " << elapsedTime <<"ms"<< std::endl;
  
-	//输出前10个结果
-	// for (int i = 0; i < 10; i++)
-	// {
-	// 	std::cout << host_c[i] << std::endl;
-	// }
  
  
 	// free stream and mem  
