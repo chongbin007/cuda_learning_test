@@ -88,7 +88,6 @@ int main(void){
 	//等待event会阻塞调用host线程，同步操作，等待stop事件.
 	//该函数类似于cudaStreamSynchronize，只不过是等待一个event而不是整个stream执行完毕
     cudaEventSynchronize(stop);
-	//stop事件过来的时候，就说明
     cudaEventElapsedTime(&elapsedTime, start, stop);
     printf("Time taken: %3.1f ms\n", elapsedTime);
 

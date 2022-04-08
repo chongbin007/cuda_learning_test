@@ -4,7 +4,6 @@
 #include <math.h>  
 #include <time.h>
  
-
 #define N (1024*1024)  //每次从CPU传输到GPU的数据块大小
 #define FULL_DATA_SIZE N*20  //总数据量
  
@@ -20,16 +19,6 @@ __global__ void kernel(int* a, int *b, int*c)
 //目的：计算两个数组，数组大小均为FULL_DATA_SIZE，的和
 int main()
 {
-	
-	//启动计时器
-	cudaEvent_t start, stop;
-	float elapsedTime;
-
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-    cudaEventRecord(start, 0);
-	clock_t start_cpu = clock();
-
 
 	int *host_a, *host_b, *host_c;
 	int *dev_a, *dev_b, *dev_c;
@@ -55,37 +44,34 @@ int main()
 	cudaMemcpy(dev_a, host_a, FULL_DATA_SIZE * sizeof(int), cudaMemcpyHostToDevice);
 	cudaMemcpy(dev_b, host_b, FULL_DATA_SIZE * sizeof(int), cudaMemcpyHostToDevice);
     std::cout << "启动 "<< std::endl;
+
+    cudaDeviceSynchronize();
+	//启动计时器
+	cudaEvent_t start, stop;
+	float elapsedTime;
+
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+    cudaEventRecord(start, 0);
+
     //启动函数，做数值加法
 	kernel <<<FULL_DATA_SIZE / 1024, 1024 >>> (dev_a, dev_b, dev_c);
  
 	//数据拷贝回主机
 	cudaMemcpy(host_c, dev_c, FULL_DATA_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
- 
-	//计时结束
-	clock_t end = (clock() - start_cpu)/1000;
+
 	cudaEventRecord(stop, 0);
-	
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&elapsedTime, start, stop);
 	
- 
-	std::cout << "消耗时间GPU： " << elapsedTime <<"ms"<< std::endl;
-	std::cout << "消耗时间CPU： " << end << "ms" << std::endl;
- 
-	//输出前10个结果
-	for (int i = 0; i < 10; i++)
-	{
-		//std::cout << host_c[i] << std::endl;
-	}
- 
- 
+	std::cout << "event计时： " << elapsedTime <<"ms"<< std::endl;
+
+
 	cudaFreeHost(host_a);
 	cudaFreeHost(host_b);
 	cudaFreeHost(host_c);
- 
 	cudaFree(dev_a);
 	cudaFree(dev_b);
 	cudaFree(dev_c);
- 
 	return 0;
 }

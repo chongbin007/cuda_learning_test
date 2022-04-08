@@ -23,21 +23,12 @@ int main()
 	int deviceID;
 	cudaGetDevice(&deviceID);
 	cudaGetDeviceProperties(&prop, deviceID);
- 
 	//检查设备是否支持重叠功能，不支持则不能使用多流加速
 	if (!prop.deviceOverlap)
 	{
 		printf("No device will handle overlaps. so no speed up from stream.\n");
 		return 0;
 	}
- 
-	//启动计时器
-	cudaEvent_t start, stop;
-	float elapsedTime;
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-	cudaEventRecord(start, 0);
- 
 	//创建一个CUDA stream
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
@@ -60,6 +51,12 @@ int main()
 		host_a[i] = i;
 		host_b[i] = FULL_DATA_SIZE - i;
 	}
+	//启动计时器
+	cudaEvent_t start, stop;
+	float elapsedTime;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+	cudaEventRecord(start, 0);
 	// 内存数据能够在分块传输的同时，GPU也在执行核函数运算，这样的异步操作，可以提升性能
 	// 将输入缓冲区划分为更小的块，每次向GPU copy N块数据，在stream上执行。并在每个块上执行“数据传输到GPU”，“计算”，“数据传输回CPU”三个步骤
 	for (int i = 0; i < FULL_DATA_SIZE; i += N) {
@@ -76,26 +73,21 @@ int main()
 		cudaMemcpyAsync(host_c + i, dev_c, N * sizeof(int), cudaMemcpyDeviceToHost, stream);
 	}
  
-	// wait until gpu execution finish  
-	cudaStreamSynchronize(stream);
- 
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&elapsedTime, start, stop);
  
 	std::cout << "消耗时间GPU： " << elapsedTime <<"ms"<< std::endl;
+
  
- 
- 
+	cudaStreamDestroy(stream);
 	// free stream and mem  
 	cudaFreeHost(host_a);
 	cudaFreeHost(host_b);
 	cudaFreeHost(host_c);
- 
 	cudaFree(dev_a);
 	cudaFree(dev_b);
 	cudaFree(dev_c);
  
-	cudaStreamDestroy(stream);
 	return 0;
 }

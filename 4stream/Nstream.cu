@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <iostream>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
@@ -69,17 +70,15 @@ int main(void){
         cudaMemcpyAsync(host_c + i * N, dev_c0 + i * N, N, cudaMemcpyDeviceToHost, stream[i]);
     }
 
-    //在停止应用程序的计时器之前，首先将两个流进行同步
+    //在停止应用程序的计时器之前，首先将进行同步
     for (int i = 0; i < N_STREAM; ++i)
         cudaStreamSynchronize(stream[i]);
     cudaEventRecord(stop, 0);//在stream0中插入stop事件
 	//等待event会阻塞调用host线程，同步操作，等待stop事件.
 	//该函数类似于cudaStreamSynchronize，只不过是等待一个event而不是整个stream执行完毕
     cudaEventSynchronize(stop);
-
-	//stop事件过来的时候，就说明
     cudaEventElapsedTime(&elapsedTime, start, stop);
-    printf("Time taken: %3.1f ms\n", elapsedTime);
+    std::cout << "消耗时间： " << elapsedTime <<"ms" << std::endl;
 
     //销毁流
     for (int i = 0; i < N_STREAM; ++i)
