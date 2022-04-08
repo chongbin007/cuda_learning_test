@@ -105,12 +105,8 @@ __global__ void Yuv420ToRgb_gpu(U8 *pYUV, U8 *pRGB, int width, int height)
         U8 *pV = pU + (height * width / 4);
 
         U8 *pBGR = NULL;
-        U8 R = 0;
-        U8 G = 0;
-        U8 B = 0;
-        U8 Y = 0;
-        U8 U = 0;
-        U8 V = 0;
+        U8 R = 0, G = 0, B = 0, Y = 0, U = 0, V = 0;
+
         double temp = 0;
         //所在的是第几行第几列的index
         size_t i = k / width;
@@ -147,12 +143,7 @@ bool Yuv420ToRgb1D(U8 *pYUV, U8 *pRGB, int width, int height)
     U8 *pV = pU + (height * width / 4);
 
     U8 *pBGR = NULL;
-    U8 R = 0;
-    U8 G = 0;
-    U8 B = 0;
-    U8 Y = 0;
-    U8 U = 0;
-    U8 V = 0;
+    U8 R = 0, G = 0, B = 0, Y = 0, U = 0, V = 0;
     double temp = 0;
     //矩阵处理，对每个像素点进行转换
     //行
