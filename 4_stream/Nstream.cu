@@ -4,23 +4,26 @@
 #include <device_launch_parameters.h>
 
 #define N_STREAM 20
-#define N (1024*1024)
+#define N (1024 * 1024)
 #define FULL_DATA_SIZE (N * N_STREAM)
 
-
-__global__ void MyKernel(int *a, int *b, int *c){
+__global__ void MyKernel(int *a, int *b, int *c)
+{
     int threadID = threadIdx.x + blockIdx.x * blockDim.x;
-    if (threadID < FULL_DATA_SIZE){
-       c[threadID] = (a[threadID] + b[threadID]) / 2;
+    if (threadID < FULL_DATA_SIZE)
+    {
+        c[threadID] = (a[threadID] + b[threadID]) / 2;
     }
 }
 
-int main(void){
+int main(void)
+{
     cudaDeviceProp prop;
     int whichDevice;
     cudaGetDevice(&whichDevice);
     cudaGetDeviceProperties(&prop, whichDevice);
-    if (!prop.deviceOverlap){
+    if (!prop.deviceOverlap)
+    {
         printf("Device will not handle overlaps, so no speed up from streams\n");
         return 0;
     }
@@ -40,45 +43,45 @@ int main(void){
     int *host_a, *host_b, *host_c;
     int *dev_a0, *dev_b0, *dev_c0;
 
-
     //在GPU上分配内存： GPU上分配的内存大小是N
     cudaMalloc((void **)&dev_a0, FULL_DATA_SIZE * sizeof(int));
     cudaMalloc((void **)&dev_b0, FULL_DATA_SIZE * sizeof(int));
     cudaMalloc((void **)&dev_c0, FULL_DATA_SIZE * sizeof(int));
 
-
     //在CPU上分配：页锁定内存，使用流的时候，要使用页锁定内存
     cudaHostAlloc((void **)&host_a, FULL_DATA_SIZE * sizeof(int),
-        cudaHostAllocDefault);
+                  cudaHostAllocDefault);
     cudaHostAlloc((void **)&host_b, FULL_DATA_SIZE * sizeof(int),
-        cudaHostAllocDefault);
+                  cudaHostAllocDefault);
     cudaHostAlloc((void **)&host_c, FULL_DATA_SIZE * sizeof(int),
-        cudaHostAllocDefault);
+                  cudaHostAllocDefault);
 
-	//主机上的内存赋值
-    for (int i = 0; i < FULL_DATA_SIZE; i++){
+    //主机上的内存赋值
+    for (int i = 0; i < FULL_DATA_SIZE; i++)
+    {
         host_a[i] = i;
         host_b[i] = FULL_DATA_SIZE - i;
     }
 
     //每个流计算N个数据：比如stream0计算数据0~(N-1), stream1计算数据N~(2N-1)
-    for (int i = 0; i < N_STREAM; i++) {
-        //host copy to device
+    for (int i = 0; i < N_STREAM; i++)
+    {
+        // host copy to device
         cudaMemcpyAsync(dev_a0 + i * N, host_a + i * N, N, cudaMemcpyHostToDevice, stream[i]);
         cudaMemcpyAsync(dev_b0 + i * N, host_b + i * N, N, cudaMemcpyHostToDevice, stream[i]);
-        MyKernel <<<N / 1024, 1024, 0, stream[i]>>>(dev_a0 + i * N, dev_b0 + i * N, dev_c0 + i * N);
+        MyKernel<<<N / 1024, 1024, 0, stream[i]>>>(dev_a0 + i * N, dev_b0 + i * N, dev_c0 + i * N);
         cudaMemcpyAsync(host_c + i * N, dev_c0 + i * N, N, cudaMemcpyDeviceToHost, stream[i]);
     }
 
     //在停止应用程序的计时器之前，首先将进行同步
     for (int i = 0; i < N_STREAM; ++i)
         cudaStreamSynchronize(stream[i]);
-    cudaEventRecord(stop, 0);//在stream0中插入stop事件
-	//等待event会阻塞调用host线程，同步操作，等待stop事件.
-	//该函数类似于cudaStreamSynchronize，只不过是等待一个event而不是整个stream执行完毕
+    cudaEventRecord(stop, 0); //在stream0中插入stop事件
+                              //等待event会阻塞调用host线程，同步操作，等待stop事件.
+                              //该函数类似于cudaStreamSynchronize，只不过是等待一个event而不是整个stream执行完毕
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&elapsedTime, start, stop);
-    std::cout << "消耗时间： " << elapsedTime <<"ms" << std::endl;
+    std::cout << "消耗时间： " << elapsedTime << "ms" << std::endl;
 
     //销毁流
     for (int i = 0; i < N_STREAM; ++i)
@@ -91,7 +94,5 @@ int main(void){
     cudaFree(dev_b0);
     cudaFree(dev_c0);
 
-
     return 0;
 }
-

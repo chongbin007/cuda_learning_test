@@ -35,6 +35,7 @@ typedef struct
     unsigned int biclrim;
 } BTIHeader;
 
+//读YUV文件存入
 int readYUVfile(const char *filename, unsigned char *buff, ssize_t size)
 {
     int err = 0;
@@ -54,7 +55,7 @@ int readYUVfile(const char *filename, unsigned char *buff, ssize_t size)
 
     return err;
 }
-
+// rgb转成bmp可预览文件函数
 void rbgToBmpFile(const char *filename, unsigned char *buff, const ssize_t size)
 {
     BTFHeader file_header = {0};
@@ -92,6 +93,50 @@ void rbgToBmpFile(const char *filename, unsigned char *buff, const ssize_t size)
     img.close();
 }
 
+// cpu上转yuv420 转成 Rgb图片的算法
+//矩阵处理，对每个像素点进行转换
+bool Yuv420ToRgb1D(U8 *pYUV, U8 *pRGB, int width, int height)
+{
+    //找到Y、U、V在内存中的首地址
+    U8 *pY = pYUV;
+    U8 *pU = pYUV + height * width;
+    U8 *pV = pU + (height * width / 4);
+
+    U8 *pBGR = NULL;
+    U8 R = 0, G = 0, B = 0, Y = 0, U = 0, V = 0;
+    double temp = 0;
+
+    //行
+    for (int i = 0; i < height; i++)
+    {
+        //列
+        for (int j = 0; j < width; j++)
+        {
+            //找到相应的RGB首地址
+            pBGR = pRGB + i * width * 3 + j * 3;
+            //取Y、U、V的数据值
+            Y = *(pY + i * width + j);
+            U = *pU;
+            V = *pV;
+
+            // yuv转rgb公式
+            temp = Y + ((1.773) * (U - 128));
+            B = temp < 0 ? 0 : (temp > 255 ? 255 : (U8)temp);
+            temp = (Y - (0.344) * (U - 128) - (0.714) * (V - 128));
+            G = temp < 0 ? 0 : (temp > 255 ? 255 : (U8)temp);
+            temp = (Y + (1.403) * (V - 128));
+            R = temp < 0 ? 0 : (temp > 255 ? 255 : (U8)temp);
+
+            //将转化后的rgb保存在rgb内存中，注意放入的顺序b是最低位
+            *pBGR = B;
+            *(pBGR + 1) = G;
+            *(pBGR + 2) = R;
+        }
+    }
+    return true;
+}
+
+// GPU上进行每个像素点的转换，每个像素点一个线程进行转换
 __global__ void Yuv420ToRgb_gpu(U8 *pYUV, U8 *pRGB, int width, int height)
 {
     size_t offsetThread = blockIdx.x * blockDim.x + threadIdx.x; //线程号
@@ -135,47 +180,6 @@ __global__ void Yuv420ToRgb_gpu(U8 *pYUV, U8 *pRGB, int width, int height)
     }
 }
 
-bool Yuv420ToRgb1D(U8 *pYUV, U8 *pRGB, int width, int height)
-{
-    //找到Y、U、V在内存中的首地址
-    U8 *pY = pYUV;
-    U8 *pU = pYUV + height * width;
-    U8 *pV = pU + (height * width / 4);
-
-    U8 *pBGR = NULL;
-    U8 R = 0, G = 0, B = 0, Y = 0, U = 0, V = 0;
-    double temp = 0;
-    //矩阵处理，对每个像素点进行转换
-    //行
-    for (int i = 0; i < height; i++)
-    {
-        //列
-        for (int j = 0; j < width; j++)
-        {
-            //找到相应的RGB首地址
-            pBGR = pRGB + i * width * 3 + j * 3;
-            //取Y、U、V的数据值
-            Y = *(pY + i * width + j);
-            U = *pU;
-            V = *pV;
-
-            // yuv转rgb公式
-            temp = Y + ((1.773) * (U - 128));
-            B = temp < 0 ? 0 : (temp > 255 ? 255 : (U8)temp);
-            temp = (Y - (0.344) * (U - 128) - (0.714) * (V - 128));
-            G = temp < 0 ? 0 : (temp > 255 ? 255 : (U8)temp);
-            temp = (Y + (1.403) * (V - 128));
-            R = temp < 0 ? 0 : (temp > 255 ? 255 : (U8)temp);
-
-            //将转化后的rgb保存在rgb内存中，注意放入的顺序b是最低位
-            *pBGR = B;
-            *(pBGR + 1) = G;
-            *(pBGR + 2) = R;
-        }
-    }
-    return true;
-}
-
 int main()
 {
     U8 *img_yuv = NULL;
@@ -196,13 +200,14 @@ int main()
     cudaMalloc(&d_rbg, size);
     cudaMemcpy(d_yuv, img_yuv, size, cudaMemcpyHostToDevice);
 
+    // run on gpu
     cudaEvent_t start_GPU, stop_GPU;
     float time_gpu;
     cudaEventCreate(&start_GPU);
     cudaEventCreate(&stop_GPU);
     cudaEventRecord(start_GPU, 0);
 
-    Yuv420ToRgb_gpu<<<100, 320>>>(d_yuv, d_rbg, IMAGE_SIZE_WIDTH, IMAGE_SIZE_HEIGHT);
+    Yuv420ToRgb_gpu<<<IMAGE_SIZE_WIDTH * IMAGE_SIZE_HEIGHT / 1024, 1024>>>(d_yuv, d_rbg, IMAGE_SIZE_WIDTH, IMAGE_SIZE_HEIGHT);
 
     cudaMemcpy(img_rgb, d_rbg, size, cudaMemcpyDeviceToHost);
     cudaEventRecord(stop_GPU, 0);
