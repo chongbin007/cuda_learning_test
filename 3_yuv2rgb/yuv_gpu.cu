@@ -239,3 +239,6 @@ int main()
 
     return 0;
 }
+// GPU time is 9.198976(ms)
+
+// CPU time is 32.188999(ms)

@@ -2,15 +2,15 @@
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
-#define N (1024 * 1024)
-#define FULL_DATA_SIZE (N * 2)
+#define N 50
 
 __global__ void kernel1(int *a, int *b, int *c)
 {
     int threadID = threadIdx.x + blockIdx.x * blockDim.x;
     if (threadID < N)
     {
-        c[threadID] = (a[threadID] + b[threadID]) / 2;
+        c[threadID] = a[threadID] + b[threadID];
+        printf("k1: %d, ", c[threadID]);
     }
 }
 __global__ void kernel2(int *a, int *b, int *c)
@@ -18,8 +18,15 @@ __global__ void kernel2(int *a, int *b, int *c)
     int threadID = threadIdx.x + blockIdx.x * blockDim.x;
     if (threadID < N)
     {
-        c[threadID] = (a[threadID] * b[threadID]) / 2;
+        c[threadID] = a[threadID] * b[threadID];
+        printf("k2: %d, ", c[threadID]);
     }
+}
+
+__global__ void kernel_default()
+{
+    int threadID = threadIdx.x + blockIdx.x * blockDim.x;
+    printf("GPU\n");
 }
 
 int main(void)
@@ -35,11 +42,11 @@ int main(void)
     }
 
     //初始化两个流
-    cudaStream_t stream0, stream1;
-    cudaStreamCreate(&stream0);
-    cudaStreamCreate(&stream1);
+    cudaStream_t streamA, streamB;
+    cudaStreamCreate(&streamA);
+    cudaStreamCreate(&streamB);
 
-    int *host_a, *host_b, *host_c;
+    int *host_a, *host_b, *host_c1, *host_c2;
     int *dev_a0, *dev_b0, *dev_c0;
     int *dev_a1, *dev_b1, *dev_c1;
 
@@ -52,18 +59,20 @@ int main(void)
     cudaMalloc((void **)&dev_c1, N * sizeof(int));
 
     //在CPU上分配：页锁定内存，使用流的时候，要使用页锁定内存
-    cudaHostAlloc((void **)&host_a, FULL_DATA_SIZE * sizeof(int),
+    cudaHostAlloc((void **)&host_a, N * sizeof(int),
                   cudaHostAllocDefault);
-    cudaHostAlloc((void **)&host_b, FULL_DATA_SIZE * sizeof(int),
+    cudaHostAlloc((void **)&host_b, N * sizeof(int),
                   cudaHostAllocDefault);
-    cudaHostAlloc((void **)&host_c, FULL_DATA_SIZE * sizeof(int),
+    cudaHostAlloc((void **)&host_c1, N * sizeof(int),
+                  cudaHostAllocDefault);
+    cudaHostAlloc((void **)&host_c2, N * sizeof(int),
                   cudaHostAllocDefault);
 
     //主机上的内存赋值
-    for (int i = 0; i < FULL_DATA_SIZE; i++)
+    for (int i = 0; i < N; i++)
     {
-        host_a[i] = rand();
-        host_b[i] = rand();
+        host_a[i] = i;
+        host_b[i] = i;
     }
     cudaEvent_t start, stop;
     float elapsedTime;
@@ -71,56 +80,57 @@ int main(void)
     //启动计时器
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
-    cudaEventRecord(start, 0); //在默认stream中插入start事件
+    //在streamA 上记录event
+    cudaEventRecord(start, 0);
 
-    //在整体数据上循环，每个数据块的大小为N, 每次将2N个数据块传给stream
-    // N个传个stream0, N个传给stream1
-
+    //启动两个kernel在不同的stream上
     //将锁定内存以异步方式复制到设备上
-    cudaMemcpyAsync(dev_a0, host_a, N * sizeof(int), cudaMemcpyHostToDevice, stream0);
-    cudaMemcpyAsync(dev_b0, host_b, N * sizeof(int), cudaMemcpyHostToDevice, stream0);
-    kernel1<<<N / 1024, 1024, 0, stream0>>>(dev_a0, dev_b0, dev_c0);
-    //将数据从设备复制回锁定内存
-    cudaMemcpyAsync(host_c, dev_c0, N * sizeof(int), cudaMemcpyDeviceToHost, stream0);
+    cudaMemcpyAsync(dev_a0, host_a, N * sizeof(int), cudaMemcpyHostToDevice, streamA);
+    cudaMemcpyAsync(dev_b0, host_b, N * sizeof(int), cudaMemcpyHostToDevice, streamA);
+    cudaMemcpyAsync(dev_a1, host_a, N * sizeof(int), cudaMemcpyHostToDevice, streamB);
+    cudaMemcpyAsync(dev_b1, host_b, N * sizeof(int), cudaMemcpyHostToDevice, streamB);
+    kernel1<<<1, N, 0, streamA>>>(dev_a0, dev_b0, dev_c0);
+    kernel2<<<1, N, 0, streamB>>>(dev_a1, dev_b1, dev_c1);
+    cudaMemcpyAsync(host_c1, dev_c0, N * sizeof(int), cudaMemcpyDeviceToHost, streamA);
+    cudaMemcpyAsync(host_c2, dev_c1, N * sizeof(int), cudaMemcpyDeviceToHost, streamB);
 
-    cudaMemcpyAsync(dev_a1, host_a + N, N * sizeof(int), cudaMemcpyHostToDevice, stream1);
-    cudaMemcpyAsync(dev_b1, host_b + N, N * sizeof(int), cudaMemcpyHostToDevice, stream1);
-    kernel2<<<N / 1024, 1024, 0, stream1>>>(dev_a1, dev_b1, dev_c1);
-    cudaMemcpyAsync(host_c + N, dev_c1, N * sizeof(int), cudaMemcpyDeviceToHost, stream1);
+    // event在多个stream的同步
+    cudaEventRecord(stop, 0); //在默认stream中插入stop事件，默认流会同步所有stream
 
-    cudaEventRecord(stop, 0); //在默认中插入stop事件，默认流会同步所有stream
-                              //等待event会阻塞调用host线程，同步操作，等待stop事件.
-                              //该函数类似于cudaStreamSynchronize，只不过是等待一个event而不是整个stream执行完毕
-    cudaEventSynchronize(stop);
+    cudaEventSynchronize(stop); //等待event会阻塞调用host线程，同步操作，等待stop事件.
+                                //该函数类似于cudaStreamSynchronize，只不过是等待一个event而不是整个stream执行完毕
     cudaEventElapsedTime(&elapsedTime, start, stop);
     printf("Time taken: %3.1f ms\n", elapsedTime);
 
     //在host上检查计算的值是否正确
     //检查host_c是结果从device拷贝回来的结果，host[a]和host[b]算法是否等于host_c
+    //这里检查结果，结果正确，说明上面的两个stream任务都计算完成且正确
+    //并且同步成功，如果报错了，说明没同步成功，有stream还没有计算完成就继续执行了。
     printf("info: check result in host\n");
     for (size_t i = 0; i < N; i++)
     {
-        if (host_c[i] != (host_a[i] + host_b[i]) / 2)
+        if (host_c1[i] != (host_a[i] + host_b[i]))
         {
             printf("test failed.\n");
             return;
         }
     }
-    for (size_t i = N; i < FULL_DATA_SIZE; i++)
+    for (size_t i = 0; i < N; i++)
     {
-        if (host_c[i] != (host_a[i] * host_b[i]) / 2)
+        if (host_c2[i] != (host_a[i] * host_b[i]))
         {
             printf("test failed.\n");
             return;
         }
     }
-    cudaStreamDestroy(stream0);
-    cudaStreamDestroy(stream1);
+    cudaStreamDestroy(streamA);
+    cudaStreamDestroy(streamB);
     printf("test passed.\n");
     //释放流和内存
     cudaFreeHost(host_a);
     cudaFreeHost(host_b);
-    cudaFreeHost(host_c);
+    cudaFreeHost(host_c1);
+    cudaFreeHost(host_c2);
     cudaFree(dev_a0);
     cudaFree(dev_b0);
     cudaFree(dev_c0);
