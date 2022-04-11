@@ -40,9 +40,7 @@ void printMatrix(double *array, int row, int col)
         printf("%f,", array[i]);
         i++;
         if (i % row == 0)
-        {
             printf("\n");
-        }
     }
 }
 
@@ -125,7 +123,6 @@ int main()
     free(h_A);
     free(h_B);
     free(h_C);
-
     cudaFree(d_A);
     cudaFree(d_B);
     cudaFree(d_C);
