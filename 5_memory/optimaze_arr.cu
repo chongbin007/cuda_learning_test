@@ -76,6 +76,9 @@ __global__ void copySharedMem(float *odata, const float *idata)
 // 写odata的时候是非连续的，这里读是按行一个个读，但是写是按列往下写。地址不连续就没有合并
 // Simplest transpose; doesn't use shared memory.
 // Global memory reads are coalesced but writes are not.
+// read instruction: Adjacent threads will read from adjacent memory. High coalescing
+// write instruction: Adjacent threads write to elements not adjacent in memory. No coalescing
+// 发现读性能没变，而写性能下降
 __global__ void transposeNaive(float *odata, const float *idata)
 {
   int x = blockIdx.x * TILE_DIM + threadIdx.x;
@@ -87,7 +90,10 @@ __global__ void transposeNaive(float *odata, const float *idata)
 }
 
 // coalesced transpose
-// 使用shared memory做转置，利用转置关系存储在shared memory中实现读写合并
+// 使用shared memory做中转，然后矩阵转置，利用转置关系存储在shared memory中实现读写合并
+// 1. 每个线程读一个数据，写到转置后的shared memory
+// 2. 将转置后的shared memory再放回global memory
+// 3. 因为shared memory速度快，所以他不需要合并
 // Uses shared memory to achieve coalesing in both reads and writes
 // Tile width == #banks causes shared memory bank conflicts.
 __global__ void transposeCoalesced(float *odata, const float *idata)
@@ -187,7 +193,6 @@ int main(int argc, char **argv)
     }
     //printf("\n");  
   }
-
 
   // correct result for error checking
   for (int j = 0; j < ny; j++)
