@@ -154,7 +154,6 @@ bool Yuv420ToRgb1D(U8 *pYUV, U8 *pRGB, int width, int height)
         {
             //找到相应的RGB首地址
             pBGR = pRGB + i * width * 3 + j * 3;
-
             //取Y、U、V的数据值
             Y = *(pY + i * width + j);
             U = *pU;
