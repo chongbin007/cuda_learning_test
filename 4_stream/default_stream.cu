@@ -75,3 +75,4 @@ int main()
 	cudaFree(dev_c);
 	return 0;
 }
+//event计时： 111.983ms

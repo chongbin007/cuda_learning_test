@@ -108,3 +108,4 @@ int main(void)
     cudaStreamDestroy(stream1);
     return 0;
 }
+// 60.3095ms
