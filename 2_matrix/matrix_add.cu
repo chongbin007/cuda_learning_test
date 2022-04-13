@@ -146,7 +146,8 @@ int main(int argc, char **argv)
 	free(C_from_gpu);
 	return 0;
 }
-
+// int nx = 8192;
+// int ny = 8192;
 // GPU Execution Time: 17.311096 ms
 // CPU Execution Time: 386.194944 ms
 // Check result success!

@@ -80,8 +80,8 @@ int main(void)
     //启动计时器
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
-    //在streamA 上记录event
-    cudaEventRecord(start, 0);
+    //在streamA 上记录event start
+    cudaEventRecord(start, streamA);
 
     //启动两个kernel在不同的stream上
     //将锁定内存以异步方式复制到设备上
@@ -94,12 +94,12 @@ int main(void)
     cudaMemcpyAsync(host_c1, dev_c0, N * sizeof(int), cudaMemcpyDeviceToHost, streamA);
     cudaMemcpyAsync(host_c2, dev_c1, N * sizeof(int), cudaMemcpyDeviceToHost, streamB);
 
-    // event在多个stream的同步
-    cudaEventRecord(stop, 0); //在默认stream中插入stop事件
-                              
+    // 在streamB上记录event stop
+    cudaEventRecord(stop, streamA); 
+    //streamB等待事件stop完成，
+    cudaStreamWaitEvent(streamB, stop); 
     cudaEventSynchronize(stop); //等待event会阻塞调用host线程，同步操作，等待stop事件.
                                 //该函数类似于cudaStreamSynchronize，只不过是等待一个event而不是整个stream执行完毕
-                                //默认流中设置事件，那么其前面的所有操作都完成时，事件才会触发完成。
     cudaEventElapsedTime(&elapsedTime, start, stop);
     printf("Time taken: %3.1f ms\n", elapsedTime);
 

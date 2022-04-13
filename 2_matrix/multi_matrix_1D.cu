@@ -129,7 +129,7 @@ int main()
     return 0;
 }
 
-// The time from GPU:      0.098737(s)
+// The time from GPU: 0.098737(s)
 // kernel test:
 // waiting for cpu result ....
 // CPU time is 6.067286(s)
