@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <cuda_runtime.h>
+#include <time.h>
+#include <sys/time.h>
 
 #define A_ROW_SIZE 700
 #define A_COL_SIZE 3000
@@ -23,9 +25,9 @@ __global__ void matrix_multiplication(double *A, double *B, double *C, size_t N)
         //遍历 A的一行，也是B的一列
         for (size_t j = 0; j < A_COL_SIZE; j++)
         {
-            size_t indexA = c_row * A_COL_SIZE + j;
-            size_t indexB = j * B_COL_SIZE + c_col;
-            C[i] += A[indexA] * B[indexB];
+            size_t indexA = c_row * A_COL_SIZE + j;//某一行的下标
+            size_t indexB = j * B_COL_SIZE + c_col;//某一列的下标
+            C[i] += A[indexA] * B[indexB]; //矩阵中该元素的值
         }
     }
 }
@@ -71,28 +73,29 @@ int main()
 
     cudaMemcpy(d_A, h_A, N_A * sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, h_B, N_B * sizeof(double), cudaMemcpyHostToDevice);
-
+    // 创建Event
     float time_gpu;
     clock_t start_cpu, stop_cpu;
     cudaEvent_t start_GPU, stop_GPU;
     cudaEventCreate(&start_GPU);
     cudaEventCreate(&stop_GPU);
     cudaEventRecord(start_GPU, 0);
+
     //进入GPU进行计算
-    matrix_multiplication<<<600, 700>>>(d_A, d_B, d_C, A_ROW_SIZE * B_COL_SIZE);
+    matrix_multiplication<<<1000, 1024>>>(d_A, d_B, d_C, A_ROW_SIZE * B_COL_SIZE);
 
     cudaEventRecord(stop_GPU, 0);
     cudaEventSynchronize(start_GPU);
     cudaEventSynchronize(stop_GPU);
     cudaEventElapsedTime(&time_gpu, start_GPU, stop_GPU);
-    printf("\nThe time from GPU:\t%f(s)\n", time_gpu / 1000);
+    printf("\nGPU time is \t%f(ms)\n", time_gpu);
     cudaDeviceSynchronize();
     cudaEventDestroy(start_GPU);
     cudaEventDestroy(stop_GPU);
 
     cudaMemcpy(h_C, d_C, N_C * sizeof(double), cudaMemcpyDeviceToHost);
 
-    printf("\nkernel test:\n");
+    //printf("\nkernel test:\n");
     // printMatrix(h_C,A_ROW_SIZE, B_COL_SIZE);
 
     printf("\nwaiting for cpu result ....\n");
@@ -106,8 +109,8 @@ int main()
         size_t rowC = i / B_COL_SIZE;
         size_t colC = i % B_COL_SIZE;
         MatC_check[i] = 0;
-        for (int index = 0; index < A_COL_SIZE; index++)
-            MatC_check[i] += h_A[rowC * A_COL_SIZE + index] * h_B[index * B_COL_SIZE + colC];
+        for (int j = 0; j < A_COL_SIZE; j++)
+            MatC_check[i] += h_A[rowC * A_COL_SIZE + j] * h_B[j * B_COL_SIZE + colC];
         if (fabs(MatC_check[i] - h_C[i]) > 0.001)
         {
             printf("%d %f %f %f\n", i, MatC_check[i], h_C[i], fabs(MatC_check[i] - h_C[i]));
@@ -115,7 +118,7 @@ int main()
         }
     }
     stop_cpu = clock();
-    printf("\nCPU time is %f(s)\n", (float)(stop_cpu - start_cpu) / CLOCKS_PER_SEC);
+    printf("\nCPU time is %f(ms)\n", (float)(stop_cpu - start_cpu) / 1000);
 
     printf("\ntest passed!\n");
 
@@ -129,7 +132,10 @@ int main()
     return 0;
 }
 
-// The time from GPU: 0.098737(s)
-// kernel test:
+// GPU time is  97.321411(ms)
+
 // waiting for cpu result ....
-// CPU time is 6.067286(s)
+
+// CPU time is 6046.300781(ms)
+
+// test passed!

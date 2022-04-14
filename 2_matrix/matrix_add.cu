@@ -12,8 +12,6 @@ double cpuSecond()
 
 void initialData(float *ip, int size)
 {
-	time_t t;
-	srand((unsigned)time(&t));
 	for (int i = 0; i < size; i++)
 		ip[i] = i;
 }
@@ -149,5 +147,5 @@ int main(int argc, char **argv)
 // int nx = 8192;
 // int ny = 8192;
 // GPU Execution Time: 17.311096 ms
-// CPU Execution Time: 386.194944 ms
+// CPU Execution Time: 654.597998 ms
 // Check result success!
