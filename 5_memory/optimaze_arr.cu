@@ -36,7 +36,7 @@ void postprocess(const float *ref, const float *res, int n, float ms)
 }
 
 // simple copy kernel
-//最简单的数据拷贝
+//最简单的矩阵数据拷贝
 // Used as reference case representing best effective bandwidth.
 __global__ void copy(float *odata, const float *idata)
 {
